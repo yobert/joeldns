@@ -1,0 +1,11 @@
+[Unit]
+Description=JoelDNS
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/joeldns
+
+[Install]
+WantedBy=multi-user.target
+
