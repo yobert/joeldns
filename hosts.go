@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os"
 	"bufio"
-	"strings"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"io"
+	"os"
+	"strings"
 )
 
 type hostcache struct {
@@ -71,4 +71,3 @@ func loadhosts() (*hostcache, error) {
 		addrs: is,
 	}, nil
 }
-

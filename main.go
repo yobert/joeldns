@@ -2,16 +2,18 @@ package main
 
 import (
 	"github.com/miekg/dns"
-	"net"
 	"log"
+	"net"
+	"os"
 	"strings"
 )
 
 type server struct {
 	client *dns.Client
 	config *dns.ClientConfig
-	hosts *hostcache
+	hosts  *hostcache
 }
+
 func (s *server) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	if r.Question[0].Qtype == dns.TypeA {
@@ -64,11 +66,13 @@ func main() {
 	s := &server{
 		config: config,
 		client: client,
-		hosts: hosts,
+		hosts:  hosts,
 	}
 
-	addr := ":1234"
+	addr := ":53"
+	if len(os.Args) > 1 {
+		addr = os.Args[1]
+	}
 	log.Println("serving dns on udp " + addr)
 	log.Fatal(dns.ListenAndServe(addr, "udp", s))
 }
-
