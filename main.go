@@ -9,45 +9,38 @@ import (
 )
 
 type server struct {
-	client *dns.Client
-	config *dns.ClientConfig
 	hosts  *hostcache
 }
 
 func (s *server) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
-	if r.Question[0].Qtype == dns.TypeA {
-		dom := r.Question[0].Name
+	m := new(dns.Msg)
+	m.SetReply(r)
+
+	for _, q := range r.Question {
+		if q.Qtype != dns.TypeA {
+			continue
+		}
+
+		dom := q.Name
 		search := strings.Trim(dom, ".")
 
 		a, ok := s.hosts.names[search]
-		if ok && len(a) > 0 {
+		if !ok {
+			continue
+		}
 
-			m := new(dns.Msg)
-			m.SetReply(r)
+		for _, addr := range a {
+			rr := new(dns.A)
+			rr.Hdr = dns.RR_Header{Name: dom, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
+			rr.A = net.ParseIP(addr).To4()
 
-			for _, addr := range a {
-				rr := new(dns.A)
-				rr.Hdr = dns.RR_Header{Name: dom, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
-				rr.A = net.ParseIP(addr).To4()
-
-				m.Answer = append(m.Answer, rr)
-			}
-
-			w.WriteMsg(m)
-			return
+			m.Answer = append(m.Answer, rr)
 		}
 	}
 
-	upstream_r, _, err := s.client.Exchange(r, net.JoinHostPort(s.config.Servers[0], s.config.Port))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	upstream_r.SetReply(r)
-
-	w.WriteMsg(upstream_r)
+	w.WriteMsg(m)
+	return
 }
 
 func main() {
@@ -56,16 +49,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client := new(dns.Client)
-
 	s := &server{
-		config: config,
-		client: client,
 		hosts:  hosts,
 	}
 
