@@ -3,18 +3,29 @@ package main
 import (
 	"github.com/miekg/dns"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 type server struct {
 	client *dns.Client
 	config *dns.ClientConfig
 	hosts  *hostcache
+
+	cache_mu sync.RWMutex
+	cache    map[string]*entry
 }
 
 func (s *server) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+
+	if hit := s.cache_get(r); hit != nil {
+		w.WriteMsg(hit)
+		return
+	}
 
 	if r.Question[0].Qtype == dns.TypeA {
 		dom := r.Question[0].Name
@@ -39,15 +50,27 @@ func (s *server) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	upstream_r, _, err := s.client.Exchange(r, net.JoinHostPort(s.config.Servers[0], s.config.Port))
-	if err != nil {
-		log.Println(err)
-		return
+	first := rand.Intn(len(s.config.Servers))
+	i := first
+
+	for {
+		upstream_r, _, err := s.client.Exchange(r, net.JoinHostPort(s.config.Servers[i], s.config.Port))
+		if err == nil {
+			s.cache_set(r, upstream_r)
+			w.WriteMsg(upstream_r)
+			return
+		}
+
+		i++
+		if i == len(s.config.Servers) {
+			i = 0
+		}
+
+		if i == first {
+			log.Println(err)
+			return
+		}
 	}
-
-	upstream_r.SetReply(r)
-
-	w.WriteMsg(upstream_r)
 }
 
 func main() {
@@ -63,11 +86,22 @@ func main() {
 
 	client := new(dns.Client)
 
+	client.ReadTimeout = time.Second
+	client.WriteTimeout = time.Second
+
 	s := &server{
 		config: config,
 		client: client,
 		hosts:  hosts,
+		cache:  make(map[string]*entry),
 	}
+
+	go func() {
+		for {
+			time.Sleep(time.Second * 10)
+			s.expire()
+		}
+	}()
 
 	addr := ":53"
 	if len(os.Args) > 1 {
