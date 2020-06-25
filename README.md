@@ -1,3 +1,7 @@
+UPDATE
+------
+This tool is useless garbage. You should use CoreDNS which has plugins to do exactly this, and it will actually be reliable.
+
 # joeldns
 The way I think a DNS server should be
 
